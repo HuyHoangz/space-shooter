@@ -1,0 +1,206 @@
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let gameRunning = false;
+let score = 0;
+let lives = 3;
+let bullets = [];
+let enemies = [];
+let enemyBullets = [];
+let boss = null;
+let lastShot = 0;
+
+const player = {
+  x: 180,
+  y: 520,
+  w: 40,
+  h: 40,
+  speed: 5
+};
+
+const keys = {};
+document.addEventListener("keydown", e => keys[e.code] = true);
+document.addEventListener("keyup", e => keys[e.code] = false);
+
+// START
+document.getElementById("startBtn").onclick = () => {
+  document.getElementById("startScreen").classList.add("hide");
+  document.getElementById("ui").classList.remove("hide");
+  canvas.classList.remove("hide");
+  startGame();
+};
+
+function startGame() {
+  score = 0;
+  lives = 3;
+  bullets = [];
+  enemies = [];
+  enemyBullets = [];
+  boss = null;
+  player.x = 180;
+  player.y = 520;
+  gameRunning = true;
+  requestAnimationFrame(gameLoop);
+}
+
+// PLAYER SHOOT
+function shoot() {
+  const now = Date.now();
+  if (now - lastShot > 300) {
+    bullets.push({
+      x: player.x + player.w / 2 - 2,
+      y: player.y
+    });
+    lastShot = now;
+  }
+}
+
+// SPAWN ENEMY
+setInterval(() => {
+  if (gameRunning && !boss) {
+    enemies.push({
+      x: Math.random() * 350,
+      y: 80,
+      w: 30,
+      h: 30,
+      dir: Math.random() > 0.5 ? 1 : -1,
+      lastShot: 0
+    });
+  }
+}, 1200);
+
+// ENEMY SHOOT
+function enemyShoot(e) {
+  const now = Date.now();
+  if (now - e.lastShot > 1200) {
+    enemyBullets.push({
+      x: e.x + e.w / 2,
+      y: e.y + e.h,
+      speed: 4
+    });
+    e.lastShot = now;
+  }
+}
+
+// SPAWN BOSS
+function spawnBoss() {
+  boss = {
+    x: 100,
+    y: 60,
+    w: 200,
+    h: 60,
+    hp: 30,
+    dir: 2,
+    lastShot: 0
+  };
+}
+
+// BOSS SHOOT
+function bossShoot() {
+  const now = Date.now();
+  if (now - boss.lastShot > 700) {
+    enemyBullets.push({
+      x: boss.x + boss.w / 2,
+      y: boss.y + boss.h,
+      speed: 6
+    });
+    boss.lastShot = now;
+  }
+}
+
+// GAME LOOP
+function gameLoop() {
+  if (!gameRunning) return;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // MOVE PLAYER
+  if (keys["ArrowLeft"]) player.x -= player.speed;
+  if (keys["ArrowRight"]) player.x += player.speed;
+  if (keys["ArrowUp"]) player.y -= player.speed;
+  if (keys["ArrowDown"]) player.y += player.speed;
+  if (keys["Space"]) shoot();
+
+  // PLAYER
+  ctx.fillStyle = "cyan";
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+
+  // BULLETS
+  ctx.fillStyle = "yellow";
+  bullets.forEach((b, i) => {
+    b.y -= 8;
+    ctx.fillRect(b.x, b.y, 4, 10);
+    if (b.y < 0) bullets.splice(i, 1);
+  });
+
+  // ENEMIES
+  ctx.fillStyle = "red";
+  enemies.forEach((e, ei) => {
+    e.x += e.dir * 2;
+    if (e.x < 0 || e.x > 370) e.dir *= -1;
+    ctx.fillRect(e.x, e.y, e.w, e.h);
+    enemyShoot(e);
+
+    bullets.forEach((b, bi) => {
+      if (
+        b.x > e.x && b.x < e.x + e.w &&
+        b.y > e.y && b.y < e.y + e.h
+      ) {
+        enemies.splice(ei, 1);
+        bullets.splice(bi, 1);
+        score += 5;
+      }
+    });
+  });
+
+  // BOSS
+  if (score >= 50 && !boss) spawnBoss();
+
+  if (boss) {
+    boss.x += boss.dir;
+    if (boss.x < 0 || boss.x + boss.w > canvas.width) boss.dir *= -1;
+    ctx.fillStyle = "purple";
+    ctx.fillRect(boss.x, boss.y, boss.w, boss.h);
+    bossShoot();
+
+    bullets.forEach((b, bi) => {
+      if (
+        b.x > boss.x && b.x < boss.x + boss.w &&
+        b.y > boss.y && b.y < boss.y + boss.h
+      ) {
+        boss.hp--;
+        bullets.splice(bi, 1);
+        if (boss.hp <= 0) {
+          score += 50;
+          boss = null;
+        }
+      }
+    });
+  }
+
+  // ENEMY BULLETS
+  ctx.fillStyle = "orange";
+  enemyBullets.forEach((b, i) => {
+    b.y += b.speed;
+    ctx.fillRect(b.x, b.y, 4, 10);
+
+    if (
+      b.x > player.x &&
+      b.x < player.x + player.w &&
+      b.y > player.y &&
+      b.y < player.y + player.h
+    ) {
+      enemyBullets.splice(i, 1);
+      lives--;
+      if (lives <= 0) {
+        alert("GAME OVER");
+        gameRunning = false;
+      }
+    }
+  });
+
+  document.getElementById("score").innerText = "Score: " + score;
+  document.getElementById("life").innerText = "❤️".repeat(lives);
+
+  requestAnimationFrame(gameLoop);
+}
